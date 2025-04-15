@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import shutil
 import pickle
 import random
 import math
@@ -9,6 +10,61 @@ import torch
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 from torch.utils.data import Dataset
+
+
+def split_dataset(root_dir, train_dir="train", val_dir="val", split_ratio=0.5, seed=42):
+    """
+    Split dataset into training and validation sets.
+
+    Args:
+        root_dir: Path to the root directory containing class folders
+        train_dir: Path where training data will be copied
+        val_dir: Path where validation data will be copied
+        split_ratio: Ratio of data for training (0.5 means 50% train, 50% val)
+        seed: Random seed for reproducibility
+    """
+    random.seed(seed)
+
+    os.makedirs(train_dir, exist_ok=True)
+    os.makedirs(val_dir, exist_ok=True)
+
+    for class_folder in os.listdir(root_dir):
+        class_path = os.path.join(root_dir, class_folder)
+
+        if not os.path.isdir(class_path):
+            continue
+
+        train_class_path = os.path.join(train_dir, class_folder)
+        val_class_path = os.path.join(val_dir, class_folder)
+
+        os.makedirs(train_class_path, exist_ok=True)
+        os.makedirs(val_class_path, exist_ok=True)
+
+        # Get all image files
+        images = [
+            f
+            for f in os.listdir(class_path)
+            if os.path.isfile(os.path.join(class_path, f))
+        ]
+
+        random.shuffle(images)
+
+        split_point = int(len(images) * split_ratio)
+
+        train_images = images[:split_point]
+        val_images = images[split_point:]
+
+        for img in train_images:
+            shutil.copy(
+                os.path.join(class_path, img), os.path.join(train_class_path, img)
+            )
+
+        for img in val_images:
+            shutil.copy(
+                os.path.join(class_path, img), os.path.join(val_class_path, img)
+            )
+
+    print(f"Dataset split complete: {train_dir} and {val_dir}")
 
 
 def read_train_data(root: str):
@@ -272,3 +328,11 @@ def get_params_groups(model: torch.nn.Module, weight_decay: float = 1e-5):
 
     # print("Param groups = %s" % json.dumps(parameter_group_names, indent=2))
     return list(parameter_group_vars.values())
+
+
+if __name__ == "__main__":
+    split_dataset(
+        r"C:\Users\trand\longg\document\selfstudy\hifuse\reference\HiFuse-main\kvasir",
+        r"C:\Users\trand\longg\document\selfstudy\hifuse\reference\HiFuse-main\kvasir\train",
+        r"C:\Users\trand\longg\document\selfstudy\hifuse\reference\HiFuse-main\kvasir\val",
+    )
