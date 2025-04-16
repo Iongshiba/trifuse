@@ -1,6 +1,7 @@
 import os
 import argparse
 import torch
+import wandb
 import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
@@ -21,12 +22,14 @@ def main(args):
     device = torch.device(args.device if torch.cuda.is_available() else "cpu")
     print(f"using {device} device.")
 
+    wandb.login()
+    logger = wandb.init(project="trifuse_kvasir", config=args)
+    logger.define_metric("accuracy", summary="max")
+
     print(args)
     print(
         'Start Tensorboard with "tensorboard --logdir=runs", view at http://localhost:6006/'
     )
-
-    tb_writer = SummaryWriter()
 
     train_images_path, train_images_label = read_train_data(args.train_data_path)
     val_images_path, val_images_label = read_val_data(args.val_data_path)
@@ -136,7 +139,7 @@ def main(args):
     for epoch in range(start_epoch + 1, args.epochs + 1):
 
         # train
-        train_loss, train_acc = train_one_epoch(
+        train_stats = train_one_epoch(
             model=model,
             optimizer=optimizer,
             data_loader=train_loader,
@@ -145,17 +148,15 @@ def main(args):
             lr_scheduler=lr_scheduler,
         )
 
+        logger.log(train_stats)
+
         # validate
-        val_loss, val_acc = evaluate(
+        val_stats = evaluate(
             model=model, data_loader=val_loader, device=device, epoch=epoch
         )
 
-        tags = ["train_loss", "train_acc", "val_loss", "val_acc", "learning_rate"]
-        tb_writer.add_scalar(tags[0], train_loss, epoch)
-        tb_writer.add_scalar(tags[1], train_acc, epoch)
-        tb_writer.add_scalar(tags[2], val_loss, epoch)
-        tb_writer.add_scalar(tags[3], val_acc, epoch)
-        tb_writer.add_scalar(tags[4], optimizer.param_groups[0]["lr"], epoch)
+        logger.log(val_stats)
+        val_acc = val_stats["eval/accuracy"]
 
         if best_acc < val_acc:
             if not os.path.isdir("./model_weight"):
@@ -188,7 +189,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str)
+    parser.add_argument("--model", type=str, default="trifuse")
     parser.add_argument("--num_classes", type=int, default=8)
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--batch-size", type=int, default=1)

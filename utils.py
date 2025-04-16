@@ -213,7 +213,13 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, lr_scheduler):
         # update lr
         lr_scheduler.step()
 
-    return accu_loss.item() / (step + 1), accu_num.item() / sample_num
+        stats = {
+            "train/loss": accu_loss.item() / (step + 1),
+            "train/accuracy": accu_num.item() / sample_num,
+            "train/learning rate": optimizer.param_groups[0]["lr"],
+        }
+
+    return stats
 
 
 class MyDataSet(Dataset):
@@ -273,7 +279,12 @@ def evaluate(model, data_loader, device, epoch):
             epoch, accu_loss.item() / (step + 1), accu_num.item() / sample_num
         )
 
-    return accu_loss.item() / (step + 1), accu_num.item() / sample_num
+    stats = {
+        "eval/loss": accu_loss.item() / (step + 1),
+        "eval/accuracy": accu_num.item() / sample_num,
+    }
+
+    return stats
 
 
 def create_lr_scheduler(
