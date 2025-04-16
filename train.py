@@ -5,8 +5,8 @@ import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 from utils import MyDataSet
-from main_model import HiFuse_Small as create_model
-from trifuse import TriFuse_Tiny as create_model
+from main_model import HiFuse_Tiny
+from trifuse import TriFuse_Tiny
 from utils import (
     read_train_data,
     read_val_data,
@@ -86,7 +86,12 @@ def main(args):
         collate_fn=val_dataset.collate_fn,
     )
 
-    model = create_model(num_classes=args.num_classes).to(device)
+    if args.model == "trifuse":
+        model = TriFuse_Tiny(num_classes=args.num_classes).to(device)
+    elif args.model == "hifuse":
+        model = HiFuse_Tiny(num_classes=args.num_classes).to(device)
+    else:
+        return
 
     if args.RESUME == False:
         if args.weights != "":
@@ -183,6 +188,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--model", type=str)
     parser.add_argument("--num_classes", type=int, default=8)
     parser.add_argument("--epochs", type=int, default=100)
     parser.add_argument("--batch-size", type=int, default=1)
