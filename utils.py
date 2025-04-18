@@ -310,13 +310,13 @@ def compute_metrics(preds, labels):
         fp = sum([1 for p, l in zip(preds, labels) if p == cls and l != cls])
         fn = sum([1 for p, l in zip(preds, labels) if p != cls and l == cls])
 
-    precision = tp / (tp + fp + 1e-6)
-    recall = tp / (tp + fn + 1e-6)
-    f1 = 2 * (precision * recall) / (precision + recall + 1e-6)
+        precision = tp / (tp + fp + 1e-6)
+        recall = tp / (tp + fn + 1e-6)
+        f1 = 2 * (precision * recall) / (precision + recall + 1e-6)
 
-    precision_sum += precision
-    recall_sum += recall
-    f1_sum += f1
+        precision_sum += precision
+        recall_sum += recall
+        f1_sum += f1
 
     num_classes = len(unique_labels)
     avg_precision = precision_sum / num_classes
