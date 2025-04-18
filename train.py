@@ -24,7 +24,6 @@ def main(args):
 
     wandb.login()
     logger = wandb.init(project="trifuse_kvasir", config=args)
-    logger.define_metric("accuracy", summary="max")
 
     print(args)
     print(
