@@ -213,11 +213,11 @@ def train_one_epoch(model, optimizer, data_loader, device, epoch, lr_scheduler):
         # update lr
         lr_scheduler.step()
 
-        stats = {
-            "train/loss": accu_loss.item() / (step + 1),
-            "train/accuracy": accu_num.item() / sample_num,
-            "train/learning rate": optimizer.param_groups[0]["lr"],
-        }
+    stats = {
+        "train/loss": accu_loss.item() / (step + 1),
+        "train/accuracy": accu_num.item() / sample_num,
+        "train/learning rate": optimizer.param_groups[0]["lr"],
+    }
 
     return stats
 
@@ -262,6 +262,9 @@ def evaluate(model, data_loader, device, epoch):
     accu_num = torch.zeros(1).to(device)
     accu_loss = torch.zeros(1).to(device)
 
+    all_preds = []
+    all_labels = []
+
     sample_num = 0
     data_loader = tqdm(data_loader, file=sys.stdout)
     for step, data in enumerate(data_loader):
@@ -272,6 +275,9 @@ def evaluate(model, data_loader, device, epoch):
         pred_classes = torch.max(pred, dim=1)[1]
         accu_num += torch.eq(pred_classes, labels.to(device)).sum()
 
+        all_preds.extend(pred_classes.cpu().numpy())
+        all_labels.extend(labels.numpy())
+
         loss = loss_function(pred, labels.to(device))
         accu_loss += loss
 
@@ -279,12 +285,45 @@ def evaluate(model, data_loader, device, epoch):
             epoch, accu_loss.item() / (step + 1), accu_num.item() / sample_num
         )
 
+    precision, recall, f1 = compute_metrics(all_preds, all_labels)
+
     stats = {
         "eval/loss": accu_loss.item() / (step + 1),
         "eval/accuracy": accu_num.item() / sample_num,
+        "eval/precision": precision,
+        "eval/recall": recall,
+        "eval/f1": f1,
     }
 
     return stats
+
+
+def compute_metrics(preds, labels):
+    unique_labels = set(labels)
+
+    precision_sum = 0
+    recall_sum = 0
+    f1_sum = 0
+
+    for cls in unique_labels:
+        tp = sum([1 for p, l in zip(preds, labels) if p == cls and l == cls])
+        fp = sum([1 for p, l in zip(preds, labels) if p == cls and l != cls])
+        fn = sum([1 for p, l in zip(preds, labels) if p != cls and l == cls])
+
+    precision = tp / (tp + fp + 1e-6)
+    recall = tp / (tp + fn + 1e-6)
+    f1 = 2 * (precision * recall) / (precision + recall + 1e-6)
+
+    precision_sum += precision
+    recall_sum += recall
+    f1_sum += f1
+
+    num_classes = len(unique_labels)
+    avg_precision = precision_sum / num_classes
+    avg_recall = recall_sum / num_classes
+    avg_f1 = f1_sum / num_classes
+
+    return avg_precision, avg_recall, avg_f1
 
 
 def create_lr_scheduler(
