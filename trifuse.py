@@ -292,17 +292,18 @@ class TriFuse(nn.Module):
 
         self.ppm = PyramidPoolingModule(in_channels=768, out_channels=96)
         self.topconv = nn.Conv2d(
-            in_channels=768, out_channels=96, kernel_size=1, stride=1
+            in_channels=768, out_channels=768, kernel_size=1, stride=1
         )
-        self.p4 = FPN_Block(hff_in_channels=384, out_channels=96)
-        self.p3 = FPN_Block(hff_in_channels=192, out_channels=96)
-        self.p2 = FPN_Block(hff_in_channels=96, out_channels=96)
+        self.p4 = FPN_Block(hff_in_channels=384, out_channels=768)
+        self.p3 = FPN_Block(hff_in_channels=192, out_channels=768)
+        self.p2 = FPN_Block(hff_in_channels=96, out_channels=768)
 
         ###### Head ######
 
-        self.conv_head = nn.Conv2d(96 * 4, 96, (3, 3), 1, 1)
-        self.conv_norm = nn.LayerNorm(96, eps=1e-6)  # final norm layer
-        self.linear = nn.Linear(96, num_classes)
+        self.conv_head = nn.Conv2d(768 * 4, 768, (3, 3), 1, 1)
+        self.conv_norm = nn.LayerNorm(768, eps=1e-6)  # final norm layer
+        self.drop_out = nn.Dropout(0.1)
+        self.linear = nn.Linear(768, num_classes)
         # self.conv_head.weight.data.mul_(conv_head_init_scale)
         # self.conv_head.bias.data.mul_(conv_head_init_scale)
 
@@ -404,13 +405,11 @@ class TriFuse(nn.Module):
         x_fu = torch.cat([x_4, x_3, x_2, x_1], dim=1)
         # [batch, 96, 224, 224]
         x_fu = self.conv_head(x_fu)
-        x_fu_avg = self.conv_norm(x_fu.mean([-2, -1]))
+        x_fu_avg = self.drop_out(self.conv_norm(x_fu.mean([-2, -1])))
         x_fi = self.linear(x_fu_avg)
 
         return x_fi
         # return self.head(x_f)
-
-        return torch.cat([x_1, x_2, x_3, x_4], dim=1)
 
 
 ##### Local Feature Block Component #####
