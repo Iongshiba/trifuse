@@ -292,11 +292,11 @@ class TriFuse(nn.Module):
 
         self.ppm = PyramidPoolingModule(in_channels=768, out_channels=96)
         self.topconv = nn.Conv2d(
-            in_channels=768, out_channels=768, kernel_size=1, stride=1
+            in_channels=768, out_channels=256, kernel_size=1, stride=1
         )
-        self.p4 = FPN_Block(hff_in_channels=384, out_channels=768)
-        self.p3 = FPN_Block(hff_in_channels=192, out_channels=768)
-        self.p2 = FPN_Block(hff_in_channels=96, out_channels=768)
+        self.p4 = FPN_Block(hff_in_channels=384, out_channels=256)
+        self.p3 = FPN_Block(hff_in_channels=192, out_channels=256)
+        self.p2 = FPN_Block(hff_in_channels=96, out_channels=256)
 
         ###### Head ######
 
