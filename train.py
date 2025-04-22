@@ -1,3 +1,4 @@
+# filepath: c:\Users\trand\longg\document\selfstudy\hifuse\reference\HiFuse-main\train.py
 import os
 import argparse
 import torch
@@ -6,8 +7,9 @@ import torch.optim as optim
 from torch.utils.tensorboard import SummaryWriter
 from torchvision import transforms
 from utils import MyDataSet
-from main_model import HiFuse_Tiny
-from trifuse import TriFuse_Tiny
+
+# from main_model import HiFuse_Tiny # Assuming HiFuse also needs fpn_dim if used
+from trifuse import TriFuse_Tiny  # Import updated TriFuse_Tiny
 from utils import (
     read_train_data,
     read_val_data,
@@ -89,11 +91,20 @@ def main(args):
     )
 
     if args.model == "trifuse":
-        model = TriFuse_Tiny(num_classes=args.num_classes).to(device)
-    elif args.model == "hifuse":
-        model = HiFuse_Tiny(num_classes=args.num_classes).to(device)
+        # Pass fpn_dim from args to the model constructor
+        model = TriFuse_Tiny(num_classes=args.num_classes, fpn_dim=args.fpn_dim).to(
+            device
+        )
+    # elif args.model == "hifuse":
+    # model = HiFuse_Tiny(num_classes=args.num_classes).to(device) # Potentially add fpn_dim here too if needed
     else:
+        print(f"Model {args.model} not recognized.")
         return
+
+    torch.save(model.state_dict, "trifuse_256.pth")
+
+    total = sum([param.nelement() for param in model.parameters()])
+    print("Number of parameters: %.2fM" % (total / 1e6))
 
     if args.RESUME == False:
         if args.weights != "":
@@ -104,14 +115,21 @@ def main(args):
 
             # Delete the weight of the relevant category
             for k in list(weights_dict.keys()):
-                if "head" in k:
+                # Adjust key check if head names changed due to fpn_dim
+                if "head" in k or "linear" in k or "conv_head" in k or "conv_norm" in k:
                     del weights_dict[k]
+            print("Loading pre-trained weights, ignoring head layers.")
             model.load_state_dict(weights_dict, strict=False)
 
     if args.freeze_layers:
         for name, para in model.named_parameters():
-            # All weights except head are frozen
-            if "head" not in name:
+            # Adjust freeze logic if head names changed
+            if not (
+                "head" in name
+                or "linear" in name
+                or "conv_head" in name
+                or "conv_norm" in name
+            ):
                 para.requires_grad_(False)
             else:
                 print("training {}".format(name))
@@ -127,13 +145,22 @@ def main(args):
     start_epoch = 0
 
     if args.RESUME:
-        path_checkpoint = "./model_weight/checkpoint/ckpt_best_100.pth"
-        print("model continue train")
-        checkpoint = torch.load(path_checkpoint)
-        model.load_state_dict(checkpoint["net"])
-        optimizer.load_state_dict(checkpoint["optimizer"])
-        start_epoch = checkpoint["epoch"]
-        lr_scheduler.load_state_dict(checkpoint["lr_schedule"])
+        # Ensure checkpoint path exists and is correct
+        path_checkpoint = "./model_weight/checkpoint/ckpt_best_100.pth"  # Example path, adjust if needed
+        if os.path.exists(path_checkpoint):
+            print("Resuming training from checkpoint:", path_checkpoint)
+            checkpoint = torch.load(path_checkpoint, map_location=device)
+            # Load model state dict carefully, especially if architecture changed
+            model.load_state_dict(checkpoint["net"])
+            optimizer.load_state_dict(checkpoint["optimizer"])
+            start_epoch = checkpoint["epoch"]
+            lr_scheduler.load_state_dict(checkpoint["lr_schedule"])
+            # Load best_acc if saved in checkpoint
+            if "best_acc" in checkpoint:
+                best_acc = checkpoint["best_acc"]
+            print(f"Resumed from epoch {start_epoch}")
+        else:
+            print(f"Checkpoint not found at {path_checkpoint}, starting from scratch.")
 
     for epoch in range(start_epoch + 1, args.epochs + 1):
 
@@ -157,63 +184,101 @@ def main(args):
         logger.log(val_stats)
         val_acc = val_stats["eval/accuracy"]
 
-        if best_acc < val_acc:
-            if not os.path.isdir("./model_weight"):
-                os.mkdir("./model_weight")
-            torch.save(model.state_dict(), "./model_weight/best_model.pth")
-            print("Saved epoch{} as new best model".format(epoch))
-            best_acc = val_acc
+        is_best = val_acc > best_acc
+        best_acc = max(val_acc, best_acc)
 
-        if epoch % 10 == 0:
+        # Save checkpoint logic
+        save_dict = {
+            "epoch": epoch,
+            "net": model.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            "lr_schedule": lr_scheduler.state_dict(),
+            "best_acc": best_acc,
+            "args": args,
+        }
+
+        if not os.path.isdir("./model_weight"):
+            os.makedirs("./model_weight")
+        if not os.path.isdir("./model_weight/checkpoint"):
+            os.makedirs("./model_weight/checkpoint")
+
+        if is_best:
+            torch.save(save_dict, "./model_weight/best_model.pth")
+            print(
+                f"Saved epoch {epoch} as new best model with accuracy: {best_acc:.4f}"
+            )
+
+        if (
+            epoch % 10 == 0 or epoch == args.epochs
+        ):  # Save checkpoint every 10 epochs and at the end
             print("epoch:", epoch)
             print("learning rate:", optimizer.state_dict()["param_groups"][0]["lr"])
-            checkpoint = {
-                "net": model.state_dict(),
-                "optimizer": optimizer.state_dict(),
-                "epoch": epoch,
-                "lr_schedule": lr_scheduler.state_dict(),
-            }
-            if not os.path.isdir("./model_weight/checkpoint"):
-                os.mkdir("./model_weight/checkpoint")
-            torch.save(
-                checkpoint, "./model_weight/checkpoint/ckpt_best_%s.pth" % (str(epoch))
-            )
+            torch.save(save_dict, f"./model_weight/checkpoint/ckpt_epoch_{epoch}.pth")
+            print(f"Saved checkpoint for epoch {epoch}")
 
         # add loss, acc and lr into tensorboard
         print("[epoch {}] accuracy: {}".format(epoch, round(val_acc, 3)))
-
-    total = sum([param.nelement() for param in model.parameters()])
-    print("Number of parameters: %.2fM" % (total / 1e6))
+    logger.finish()  # Finish wandb run
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--model", type=str, default="trifuse")
-    parser.add_argument("--num_classes", type=int, default=8)
-    parser.add_argument("--epochs", type=int, default=100)
-    parser.add_argument("--batch-size", type=int, default=1)
-    parser.add_argument("--lr", type=float, default=1e-4)
-    parser.add_argument("--wd", type=float, default=1e-2)
-    parser.add_argument("--RESUME", type=bool, default=False)
+    parser.add_argument(
+        "--model",
+        type=str,
+        default="trifuse",
+        help="Model name (e.g., trifuse, hifuse)",
+    )
+    parser.add_argument(
+        "--num_classes", type=int, default=8, help="Number of output classes"
+    )
+    parser.add_argument(
+        "--fpn-dim", type=int, default=256, help="Dimension of FPN output channels"
+    )  # Added fpn_dim arg
+    parser.add_argument("--epochs", type=int, default=100, help="Total training epochs")
+    parser.add_argument("--batch-size", type=int, default=8, help="Training batch size")
+    parser.add_argument("--lr", type=float, default=1e-4, help="Initial learning rate")
+    parser.add_argument("--wd", type=float, default=1e-2, help="Weight decay")
+    parser.add_argument(
+        "--RESUME", action="store_true", help="Resume training from checkpoint"
+    )  # Use action='store_true'
 
+    # Default paths updated for clarity, ensure they exist or adjust as needed
     parser.add_argument(
         "--train_data_path",
         type=str,
-        default=r"C:\Users\trand\longg\document\selfstudy\hifuse\reference\HiFuse-main\kvasir",
+        default=r"C:\Users\trand\longg\document\selfstudy\hifuse\reference\HiFuse-main\kvasir\train",  # Example path
+        help="Path to the training dataset root directory",
     )
     parser.add_argument(
         "--val_data_path",
         type=str,
-        default=r"C:\Users\trand\longg\document\selfstudy\hifuse\reference\HiFuse-main\kvasir",
+        default=r"C:\Users\trand\longg\document\selfstudy\hifuse\reference\HiFuse-main\kvasir\val",  # Example path
+        help="Path to the validation dataset root directory",
     )
 
-    parser.add_argument("--weights", type=str, default="", help="initial weights path")
-
-    parser.add_argument("--freeze-layers", type=bool, default=False)
     parser.add_argument(
-        "--device", default="cuda:0", help="device id (i.e. 0 or 0,1 or cpu)"
+        "--weights",
+        type=str,
+        default="",
+        help="Initial weights path (for transfer learning, ignored if RESUME is True)",
+    )
+
+    parser.add_argument(
+        "--freeze-layers", action="store_true", help="Freeze layers except the head"
+    )  # Use action='store_true'
+    parser.add_argument(
+        "--device", default="cuda:0", help="Device id (e.g., cuda:0 or cpu)"
     )
 
     opt = parser.parse_args()
+
+    # Ensure data paths exist before starting
+    assert os.path.exists(
+        opt.train_data_path
+    ), f"Training data path not found: {opt.train_data_path}"
+    assert os.path.exists(
+        opt.val_data_path
+    ), f"Validation data path not found: {opt.val_data_path}"
 
     main(opt)

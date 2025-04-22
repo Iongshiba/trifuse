@@ -137,13 +137,13 @@ class TriFuse(nn.Module):
         use_checkpoint=False,
         HFF_dp=0.0,
         conv_depths=(2, 2, 2, 2),
-        conv_dims=(96, 192, 384, 768),
         conv_drop_path_rate=0.0,
         conv_head_init_scale: float = 1.0,
+        fpn_dim=256,  # Add fpn_dim argument
         **kwargs,
     ):
         super().__init__()
-
+        conv_dims = (int(fpn_dim / 8), int(fpn_dim / 4), int(fpn_dim / 2), int(fpn_dim))
         ###### Local Branch Setting #######
 
         self.downsample_layers = nn.ModuleList()  # stem + 3 stage downsample
@@ -276,34 +276,58 @@ class TriFuse(nn.Module):
         ###### Hierachical Feature Fusion Block Setting #######
 
         self.fu1 = HFF_block(
-            ch_1=96, ch_2=96, r_2=16, ch_int=96, ch_out=96, drop_rate=HFF_dp
+            ch_1=conv_dims[0],
+            ch_2=conv_dims[0],
+            r_2=16,
+            ch_int=conv_dims[0],
+            ch_out=conv_dims[0],
+            drop_rate=HFF_dp,
         )
         self.fu2 = HFF_block(
-            ch_1=192, ch_2=192, r_2=16, ch_int=192, ch_out=192, drop_rate=HFF_dp
+            ch_1=conv_dims[1],
+            ch_2=conv_dims[1],
+            r_2=16,
+            ch_int=conv_dims[1],
+            ch_out=conv_dims[1],
+            drop_rate=HFF_dp,
         )
         self.fu3 = HFF_block(
-            ch_1=384, ch_2=384, r_2=16, ch_int=384, ch_out=384, drop_rate=HFF_dp
+            ch_1=conv_dims[2],
+            ch_2=conv_dims[2],
+            r_2=16,
+            ch_int=conv_dims[2],
+            ch_out=conv_dims[2],
+            drop_rate=HFF_dp,
         )
         self.fu4 = HFF_block(
-            ch_1=768, ch_2=768, r_2=16, ch_int=768, ch_out=768, drop_rate=HFF_dp
+            ch_1=conv_dims[3],
+            ch_2=conv_dims[3],
+            r_2=16,
+            ch_int=conv_dims[3],
+            ch_out=conv_dims[3],
+            drop_rate=HFF_dp,
         )
 
         ###### Feature Pyramid Network Setting ######
-
-        self.ppm = PyramidPoolingModule(in_channels=768, out_channels=96)
+        # Use fpn_dim for output channels
+        self.ppm = PyramidPoolingModule(in_channels=conv_dims[3], out_channels=fpn_dim)
         self.topconv = nn.Conv2d(
-            in_channels=768, out_channels=256, kernel_size=1, stride=1
+            in_channels=conv_dims[3], out_channels=fpn_dim, kernel_size=1, stride=1
         )
-        self.p4 = FPN_Block(hff_in_channels=384, out_channels=256)
-        self.p3 = FPN_Block(hff_in_channels=192, out_channels=256)
-        self.p2 = FPN_Block(hff_in_channels=96, out_channels=256)
+        self.p4 = FPN_Block(hff_in_channels=conv_dims[2], out_channels=fpn_dim)
+        self.p3 = FPN_Block(hff_in_channels=conv_dims[1], out_channels=fpn_dim)
+        self.p2 = FPN_Block(hff_in_channels=conv_dims[0], out_channels=fpn_dim)
 
         ###### Head ######
-
-        self.conv_head = nn.Conv2d(768 * 4, 768, (3, 3), 1, 1)
-        self.conv_norm = nn.LayerNorm(768, eps=1e-6)  # final norm layer
+        # Adjust head dimensions based on fpn_dim
+        head_in_channels = fpn_dim * 4
+        head_out_channels = (
+            fpn_dim  # Or keep 768 if needed, adjust linear layer accordingly
+        )
+        self.conv_head = nn.Conv2d(head_in_channels, head_out_channels, (3, 3), 1, 1)
+        self.conv_norm = nn.LayerNorm(head_out_channels, eps=1e-6)  # final norm layer
         self.drop_out = nn.Dropout(0.1)
-        self.linear = nn.Linear(768, num_classes)
+        self.linear = nn.Linear(head_out_channels, num_classes)
         # self.conv_head.weight.data.mul_(conv_head_init_scale)
         # self.conv_head.bias.data.mul_(conv_head_init_scale)
 
@@ -1149,22 +1173,31 @@ class PatchMerging(nn.Module):
         return x
 
 
-def TriFuse_Tiny(num_classes: int):
+def TriFuse_Tiny(num_classes: int, fpn_dim: int = 256):  # Add fpn_dim
     model = TriFuse(
-        depths=(2, 2, 2, 2), conv_depths=(2, 2, 2, 2), num_classes=num_classes
+        depths=(2, 2, 2, 2),
+        conv_depths=(2, 2, 2, 2),
+        num_classes=num_classes,
+        fpn_dim=fpn_dim,  # Pass fpn_dim
     )
     return model
 
 
-def TriFuse_Small(num_classes: int):
+def TriFuse_Small(num_classes: int, fpn_dim: int = 256):  # Add fpn_dim
     model = TriFuse(
-        depths=(2, 2, 6, 2), conv_depths=(2, 2, 6, 2), num_classes=num_classes
+        depths=(2, 2, 6, 2),
+        conv_depths=(2, 2, 6, 2),
+        num_classes=num_classes,
+        fpn_dim=fpn_dim,  # Pass fpn_dim
     )
     return model
 
 
-def TriFuse_Base(num_classes: int):
+def TriFuse_Base(num_classes: int, fpn_dim: int = 256):  # Add fpn_dim
     model = TriFuse(
-        depths=(2, 2, 18, 2), conv_depths=(2, 2, 18, 2), num_classes=num_classes
+        depths=(2, 2, 18, 2),
+        conv_depths=(2, 2, 18, 2),
+        num_classes=num_classes,
+        fpn_dim=fpn_dim,  # Pass fpn_dim
     )
     return model
