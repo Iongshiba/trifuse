@@ -124,7 +124,6 @@ class TriFuse(nn.Module):
         num_classes,
         patch_size=4,
         in_chans=3,
-        embed_dim=96,
         depths=(2, 2, 2, 2),
         num_heads=(4, 8, 16, 32),
         window_size=7,
@@ -144,6 +143,7 @@ class TriFuse(nn.Module):
     ):
         super().__init__()
         conv_dims = (int(fpn_dim / 8), int(fpn_dim / 4), int(fpn_dim / 2), int(fpn_dim))
+        embed_dim = int(fpn_dim / 8)
         ###### Local Branch Setting #######
 
         self.downsample_layers = nn.ModuleList()  # stem + 3 stage downsample
