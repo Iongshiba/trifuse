@@ -10,6 +10,7 @@ from utils import MyDataSet
 
 # from main_model import HiFuse_Tiny # Assuming HiFuse also needs fpn_dim if used
 from trifuse import TriFuse_Tiny  # Import updated TriFuse_Tiny
+from main_model import HiFuse_Tiny
 from utils import (
     read_train_data,
     read_val_data,
@@ -95,13 +96,13 @@ def main(args):
         model = TriFuse_Tiny(num_classes=args.num_classes, fpn_dim=args.fpn_dim).to(
             device
         )
-    # elif args.model == "hifuse":
-    # model = HiFuse_Tiny(num_classes=args.num_classes).to(device) # Potentially add fpn_dim here too if needed
+    elif args.model == "hifuse":
+        model = HiFuse_Tiny(num_classes=args.num_classes).to(
+            device
+        )  # Potentially add fpn_dim here too if needed
     else:
         print(f"Model {args.model} not recognized.")
         return
-
-    torch.save(model.state_dict, "trifuse_256.pth")
 
     total = sum([param.nelement() for param in model.parameters()])
     print("Number of parameters: %.2fM" % (total / 1e6))
@@ -226,7 +227,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--model",
         type=str,
-        default="trifuse",
+        default="hifuse",
         help="Model name (e.g., trifuse, hifuse)",
     )
     parser.add_argument(

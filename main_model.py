@@ -46,7 +46,6 @@ class main_model(nn.Module):
         num_classes,
         patch_size=4,
         in_chans=3,
-        embed_dim=96,
         depths=(2, 2, 2, 2),
         num_heads=(4, 8, 16, 32),
         window_size=7,
@@ -59,13 +58,14 @@ class main_model(nn.Module):
         use_checkpoint=False,
         HFF_dp=0.0,
         conv_depths=(2, 2, 2, 2),
-        conv_dims=(96, 192, 384, 768),
         conv_drop_path_rate=0.0,
         conv_head_init_scale: float = 1.0,
+        fpn_dim=256,  # Add fpn_dim parameter
         **kwargs,
     ):
         super().__init__()
-
+        conv_dims = (int(fpn_dim / 8), int(fpn_dim / 4), int(fpn_dim / 2), int(fpn_dim))
+        embed_dim = int(fpn_dim / 8)
         ###### Local Branch Setting #######
 
         self.downsample_layers = nn.ModuleList()  # stem + 3 stage downsample
@@ -202,16 +202,36 @@ class main_model(nn.Module):
         ###### Hierachical Feature Fusion Block Setting #######
 
         self.fu1 = HFF_block(
-            ch_1=96, ch_2=96, r_2=16, ch_int=96, ch_out=96, drop_rate=HFF_dp
+            ch_1=conv_dims[0],
+            ch_2=conv_dims[0],
+            r_2=16,
+            ch_int=conv_dims[0],
+            ch_out=conv_dims[0],
+            drop_rate=HFF_dp,
         )
         self.fu2 = HFF_block(
-            ch_1=192, ch_2=192, r_2=16, ch_int=192, ch_out=192, drop_rate=HFF_dp
+            ch_1=conv_dims[1],
+            ch_2=conv_dims[1],
+            r_2=16,
+            ch_int=conv_dims[1],
+            ch_out=conv_dims[1],
+            drop_rate=HFF_dp,
         )
         self.fu3 = HFF_block(
-            ch_1=384, ch_2=384, r_2=16, ch_int=384, ch_out=384, drop_rate=HFF_dp
+            ch_1=conv_dims[2],
+            ch_2=conv_dims[2],
+            r_2=16,
+            ch_int=conv_dims[2],
+            ch_out=conv_dims[2],
+            drop_rate=HFF_dp,
         )
         self.fu4 = HFF_block(
-            ch_1=768, ch_2=768, r_2=16, ch_int=768, ch_out=768, drop_rate=HFF_dp
+            ch_1=conv_dims[3],
+            ch_2=conv_dims[3],
+            r_2=16,
+            ch_int=conv_dims[3],
+            ch_out=conv_dims[3],
+            drop_rate=HFF_dp,
         )
 
     def _init_weights(self, m):
