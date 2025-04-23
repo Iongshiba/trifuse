@@ -264,13 +264,6 @@ class TriFuse(nn.Module):
             use_checkpoint=use_checkpoint,
         )
 
-        self.norm = norm_layer(self.num_features)
-        self.avgpool = nn.AdaptiveAvgPool1d(1)
-        self.head = (
-            nn.Linear(self.num_features, num_classes)
-            if num_classes > 0
-            else nn.Identity()
-        )
         self.apply(self._init_weights)
 
         ###### Hierachical Feature Fusion Block Setting #######
@@ -310,7 +303,6 @@ class TriFuse(nn.Module):
 
         ###### Feature Pyramid Network Setting ######
         # Use fpn_dim for output channels
-        self.ppm = PyramidPoolingModule(in_channels=conv_dims[3], out_channels=fpn_dim)
         self.topconv = nn.Conv2d(
             in_channels=conv_dims[3], out_channels=fpn_dim, kernel_size=1, stride=1
         )
